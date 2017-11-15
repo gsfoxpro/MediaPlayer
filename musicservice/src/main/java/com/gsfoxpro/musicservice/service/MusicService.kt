@@ -1,14 +1,15 @@
 package com.gsfoxpro.musicservice.service
 
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.net.Uri
 import android.os.Binder
+import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import android.util.Log
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.source.ExtractorMediaSource
@@ -16,14 +17,12 @@ import com.google.android.exoplayer2.source.TrackGroupArray
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
-import com.gsfoxpro.musicservice.IPlayer
+import com.gsfoxpro.musicservice.MusicRepo
 import com.gsfoxpro.musicservice.model.AudioTrack
-import android.app.PendingIntent
-import android.content.Context
-import android.media.AudioManager
+import com.gsfoxpro.musicservice.ui.MusicPlayerNotification
 
 
-class MusicService : Service(), IPlayer {
+class MusicService : Service() {
 
     inner class LocalBinder(val musicService: MusicService = this@MusicService) : Binder()
     private val binder = LocalBinder()
@@ -40,6 +39,8 @@ class MusicService : Service(), IPlayer {
                  or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
                  or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
 
+    private val musicRepo: MusicRepo = MusicRepo()
+    private var lastInitilizedTrack: AudioTrack? = null
 
 
     val mediaSessionToken: MediaSessionCompat.Token?
@@ -47,75 +48,66 @@ class MusicService : Service(), IPlayer {
 
     private var mediaSessionCallback = object : MediaSessionCompat.Callback() {
 
-        override fun onPlay() {
-            if (_state == IPlayer.STATE_IDLE) {
-                initCurrentTrack()
-            }
+        override fun onSkipToQueueItem(id: Long) {
+            super.onSkipToQueueItem(id)
+        }
 
-            val metadata = metadataBuilder
-                    //.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, BitmapFactory.decodeResource(getResources(), track.getBitmapResId()))
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTrack?.subtitle)
-                    //.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, track.getArtist())
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentTrack?.title)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, exoPlayer.duration) //тут по идее уже надо бы проинициализировать трек
-                    .build()
+        override fun onAddQueueItem(description: MediaDescriptionCompat?) {
+            super.onAddQueueItem(description)
+        }
+
+        override fun onPlay() {
+            val currentTrack = musicRepo.currentAudioTrack
+            if (lastInitilizedTrack?.url != currentTrack?.url) {
+                initTrack(currentTrack)
+            }
 
             mediaSession?.apply {
-                setMetadata(metadata)
                 isActive = true
                 setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+                MusicPlayerNotification.show(this@MusicService, this)
             }
 
-            play()
+            exoPlayer.playWhenReady = true
         }
 
         override fun onPause() {
-            pause()
+            exoPlayer.playWhenReady = false
 
-            mediaSession?.setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+            mediaSession?.apply {
+                setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+                MusicPlayerNotification.show(this@MusicService, this)
+            }
         }
 
         override fun onStop() {
-            stop()
+            exoPlayer.stop()
+            lastInitilizedTrack = null
 
             mediaSession?.apply {
                 isActive = false
                 setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_STOPPED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
             }
-
+            MusicPlayerNotification.hide(this@MusicService)
         }
 
         override fun onSkipToNext() {
-            next()
+            initTrack(musicRepo.nextAudioTrack)
+            exoPlayer.playWhenReady
+            mediaSession?.let { MusicPlayerNotification.show(this@MusicService, it) }
         }
 
         override fun onSkipToPrevious() {
-            prev()
+            initTrack(musicRepo.prevAudioTrack)
+            exoPlayer.playWhenReady
+            mediaSession?.let { MusicPlayerNotification.show(this@MusicService, it) }
         }
 
     }
 
     private lateinit var exoPlayer: SimpleExoPlayer
+    var autoplay = false
 
-    private var _state: Int = IPlayer.STATE_IDLE
-    private var _playlist: List<AudioTrack> = ArrayList()
-    private var _currentTrackIndex = 0
-
-    override val state: Int get() = _state
-
-    override var playlist: List<AudioTrack>
-        get() = _playlist
-        set(value) {
-            _playlist = value
-            _currentTrackIndex = 0
-            initCurrentTrack()
-        }
-
-    override val currentTrackIndex: Int get() = _currentTrackIndex
-    override val currentTrack: AudioTrack? get() = playlist.getOrNull(currentTrackIndex)
-    override var autoplay = false
-    override val hasNext get() = !playlist.isEmpty() && currentTrackIndex < playlist.size - 1
-    override val hasPrev get() = !playlist.isEmpty() && currentTrackIndex > 0
 
     override fun onBind(intent: Intent?) = binder
 
@@ -144,36 +136,9 @@ class MusicService : Service(), IPlayer {
             }
 
             override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-                when (playbackState) {
-                    Player.STATE_IDLE -> _state = IPlayer.STATE_IDLE
-                    Player.STATE_BUFFERING ->
-                        if (!playWhenReady) {
-                            _state = IPlayer.STATE_PAUSED
-                        }
-                    Player.STATE_READY ->
-                        _state = if (playWhenReady) IPlayer.STATE_PLAYING else IPlayer.STATE_PAUSED
-                    Player.STATE_ENDED -> {
-                        /*when {
-                            playWhenReady && autoplay -> next()
-                            else -> changeState(IPlayerModel.STATE_IDLE)
-                        }*/
-                    }
+                if (playWhenReady && playbackState == Player.STATE_ENDED) {
+                    mediaSessionCallback.onSkipToNext()
                 }
-
-                var stateString = ""
-                when (state) {
-                    IPlayer.STATE_IDLE -> {
-                        stateString = "STATE_IDLE"
-                    }
-                    IPlayer.STATE_PLAYING -> {
-                        stateString = "STATE_PLAYING"
-                    }
-                    IPlayer.STATE_PAUSED -> {
-                        stateString = "STATE_PAUSED"
-                    }
-                }
-
-                Log.d("MusicService", "changed _state to $stateString")
             }
 
             override fun onLoadingChanged(isLoading: Boolean) {
@@ -185,7 +150,6 @@ class MusicService : Service(), IPlayer {
             override fun onTimelineChanged(timeline: Timeline?, manifest: Any?) {
             }
         })
-
     }
 
     override fun onDestroy() {
@@ -199,44 +163,17 @@ class MusicService : Service(), IPlayer {
         return super.onStartCommand(intent, flags, startId)
     }
 
-    override fun changeTrack(index: Int) {
-        if (index == currentTrackIndex) {
-            return
-        }
-        if (index in 0 until playlist.size) {
-            _currentTrackIndex = index
-        }
-        initCurrentTrack()
-    }
+    private fun initTrack(audioTrack: AudioTrack?) {
+        audioTrack?.let {
+            metadataBuilder
+                    .putString(MediaMetadataCompat.METADATA_KEY_ART_URI, it.imageUrl)
+                    //.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, BitmapFactory.decodeResource(getResources(), track.getBitmapResId()))
+                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, it.subtitle)
+                    //.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, track.getArtist())
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, it.title)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, exoPlayer.duration) //тут по идее уже надо бы проинициализировать трек
+            mediaSession?.setMetadata(metadataBuilder.build())
 
-    override fun play() {
-        exoPlayer.playWhenReady = true
-    }
-
-    override fun pause() {
-        exoPlayer.playWhenReady = false
-    }
-
-    override fun stop() {
-        exoPlayer.stop()
-    }
-
-    override fun next() {
-        if (hasNext) {
-            changeTrack(currentTrackIndex + 1)
-            play()
-        }
-    }
-
-    override fun prev() {
-         if (hasPrev) {
-             changeTrack(currentTrackIndex - 1)
-             play()
-         }
-    }
-
-    private fun initCurrentTrack() {
-        currentTrack?.let {
             val mediaSource = ExtractorMediaSource(
                     Uri.parse(it.url),
                     DefaultDataSourceFactory(applicationContext, "user-agent"),
@@ -244,6 +181,8 @@ class MusicService : Service(), IPlayer {
                     null,
                     null)
             exoPlayer.prepare(mediaSource)
+
+            lastInitilizedTrack = it
         }
     }
 }

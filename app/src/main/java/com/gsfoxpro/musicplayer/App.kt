@@ -7,15 +7,14 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.support.v4.media.session.MediaSessionCompat
-import com.gsfoxpro.musicservice.IPlayer
 import com.gsfoxpro.musicservice.service.MusicService
 
 class App : Application() {
 
-    private var musicService: MusicService? = null
+    private var _musicService: MusicService? = null
 
-    val player: IPlayer?
-        get() = musicService
+    val musicService: MusicService?
+        get() = _musicService
 
     val mediaSessionToken: MediaSessionCompat.Token?
         get() = musicService?.mediaSessionToken
@@ -24,12 +23,12 @@ class App : Application() {
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            musicService = (binder as MusicService.LocalBinder).musicService
+            _musicService = (binder as MusicService.LocalBinder).musicService
             isMusicServiceBound = true
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            musicService = null
+            _musicService = null
             isMusicServiceBound = false
         }
     }

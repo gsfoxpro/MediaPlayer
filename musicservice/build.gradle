@@ -5,6 +5,7 @@ apply plugin: 'kotlin-android'
 project.ext {
     support_library_version = "26.1.0"
     exoplayer_version = "r2.5.4"
+    glide_version = "4.3.1"
 }
 
 
@@ -41,8 +42,12 @@ dependencies {
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.1'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jre7:$kotlin_version"
 
-    compile "com.google.android.exoplayer:exoplayer-core:$exoplayer_version"
-    compile "com.google.android.exoplayer:exoplayer-dash:$exoplayer_version"
+    implementation "com.google.android.exoplayer:exoplayer-core:$exoplayer_version"
+    implementation "com.google.android.exoplayer:exoplayer-dash:$exoplayer_version"
+
+    implementation "com.github.bumptech.glide:glide:$glide_version"
+    annotationProcessor "com.github.bumptech.glide:compiler:$glide_version"
+
 }
 repositories {
     mavenCentral()
