@@ -16,8 +16,8 @@ class App : Application() {
     val musicService: MusicService?
         get() = _musicService
 
-    val mediaSessionToken: MediaSessionCompat.Token?
-        get() = musicService?.mediaSessionToken
+    val mediaSession: MediaSessionCompat?
+        get() = _musicService?.mediaSession
 
     private var isMusicServiceBound: Boolean = false
 

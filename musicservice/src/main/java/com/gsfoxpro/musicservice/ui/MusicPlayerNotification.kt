@@ -22,14 +22,13 @@ class MusicPlayerNotification {
         private val imageCache: MutableMap<Uri, Bitmap> = HashMap()
 
         fun show(context: Context, mediaSession: MediaSessionCompat) {
-
             val controller = mediaSession.controller
             val mediaMetadata = controller.metadata
             val description = mediaMetadata.description
 
-            val played = controller.playbackState.state == PlaybackStateCompat.STATE_PLAYING
+            val playing = controller.playbackState.state == PlaybackStateCompat.STATE_PLAYING
 
-            val smallIcon = if (played) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+            val smallIcon = if (playing) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
             val largeImage = imageCache[description.iconUri]
 
             val stopIntent = MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_STOP)
@@ -42,7 +41,7 @@ class MusicPlayerNotification {
                             .setMediaSession(mediaSession.sessionToken)
                     )
                     .addAction(android.R.drawable.ic_media_previous, "", MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
-                    .addAction(if (played) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play, "", MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_PLAY_PAUSE))
+                    .addAction(if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play, "", MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_PLAY_PAUSE))
                     .addAction(android.R.drawable.ic_media_next, "", MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
                     .setContentIntent(controller.sessionActivity)
                     .setDeleteIntent(stopIntent)

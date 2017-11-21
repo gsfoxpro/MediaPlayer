@@ -27,7 +27,10 @@ class MusicService : Service() {
     inner class LocalBinder(val musicService: MusicService = this@MusicService) : Binder()
     private val binder = LocalBinder()
 
-    private var mediaSession: MediaSessionCompat? = null
+    var mediaSession: MediaSessionCompat? = null
+        private set
+
+    var musicRepo: MusicRepo? = null
 
     private val metadataBuilder = MediaMetadataCompat.Builder()
     private val stateBuilder:PlaybackStateCompat.Builder = PlaybackStateCompat.Builder()
@@ -39,12 +42,7 @@ class MusicService : Service() {
                  or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
                  or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
 
-    private val musicRepo: MusicRepo = MusicRepo()
-    private var lastInitilizedTrack: AudioTrack? = null
-
-
-    val mediaSessionToken: MediaSessionCompat.Token?
-        get() = mediaSession?.sessionToken
+    private var lastInitializedTrack: AudioTrack? = null
 
     private var mediaSessionCallback = object : MediaSessionCompat.Callback() {
 
@@ -57,57 +55,28 @@ class MusicService : Service() {
         }
 
         override fun onPlay() {
-            val currentTrack = musicRepo.currentAudioTrack
-            if (lastInitilizedTrack?.url != currentTrack?.url) {
-                initTrack(currentTrack)
-            }
-
-            mediaSession?.apply {
-                isActive = true
-                setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
-                MusicPlayerNotification.show(this@MusicService, this)
-            }
-
-            exoPlayer.playWhenReady = true
+            play()
         }
 
         override fun onPause() {
-            exoPlayer.playWhenReady = false
-
-            mediaSession?.apply {
-                setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
-                MusicPlayerNotification.show(this@MusicService, this)
-            }
+            pause()
         }
 
         override fun onStop() {
-            exoPlayer.stop()
-            lastInitilizedTrack = null
-
-            mediaSession?.apply {
-                isActive = false
-                setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_STOPPED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
-            }
-            MusicPlayerNotification.hide(this@MusicService)
+            stop()
         }
 
         override fun onSkipToNext() {
-            initTrack(musicRepo.nextAudioTrack)
-            exoPlayer.playWhenReady
-            mediaSession?.let { MusicPlayerNotification.show(this@MusicService, it) }
+            next()
         }
 
         override fun onSkipToPrevious() {
-            initTrack(musicRepo.prevAudioTrack)
-            exoPlayer.playWhenReady
-            mediaSession?.let { MusicPlayerNotification.show(this@MusicService, it) }
+            prev()
         }
 
     }
 
     private lateinit var exoPlayer: SimpleExoPlayer
-    var autoplay = false
-
 
     override fun onBind(intent: Intent?) = binder
 
@@ -136,7 +105,7 @@ class MusicService : Service() {
             }
 
             override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-                if (playWhenReady && playbackState == Player.STATE_ENDED) {
+                if (musicRepo?.autoPlay == true && playWhenReady && playbackState == Player.STATE_ENDED) {
                     mediaSessionCallback.onSkipToNext()
                 }
             }
@@ -182,7 +151,54 @@ class MusicService : Service() {
                     null)
             exoPlayer.prepare(mediaSource)
 
-            lastInitilizedTrack = it
+            lastInitializedTrack = it
         }
+    }
+
+    private fun play() {
+        val currentTrack = musicRepo?.currentAudioTrack
+        play(currentTrack)
+    }
+
+    private fun play(audioTrack: AudioTrack?) {
+        if (lastInitializedTrack?.url != audioTrack?.url) {
+            initTrack(audioTrack)
+        }
+
+        mediaSession?.apply {
+            isActive = true
+            setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+            MusicPlayerNotification.show(this@MusicService, this)
+        }
+
+        exoPlayer.playWhenReady = true
+    }
+
+    private fun pause() {
+        exoPlayer.playWhenReady = false
+
+        mediaSession?.apply {
+            setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+            MusicPlayerNotification.show(this@MusicService, this)
+        }
+    }
+
+    private fun stop() {
+        exoPlayer.stop()
+        lastInitializedTrack = null
+
+        mediaSession?.apply {
+            isActive = false
+            setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_STOPPED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+        }
+        MusicPlayerNotification.hide(this@MusicService)
+    }
+
+    private fun next() {
+        play(musicRepo?.nextAudioTrack)
+    }
+
+    private fun prev() {
+        play(musicRepo?.prevAudioTrack)
     }
 }
