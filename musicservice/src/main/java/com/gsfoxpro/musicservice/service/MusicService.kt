@@ -43,6 +43,7 @@ class MusicService : Service() {
     private var audioFocusRequested = false
     private var lastInitializedTrack: AudioTrack? = null
     private val metadataBuilder = MediaMetadataCompat.Builder()
+    private var becomingNoisyReceiverRegistered = false
 
     private val stateBuilder: PlaybackStateCompat.Builder = PlaybackStateCompat.Builder()
          .setActions(
@@ -214,7 +215,7 @@ class MusicService : Service() {
             MusicPlayerNotification.show(this@MusicService, this)
         }
 
-        registerReceiver(becomingNoisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        registerBecomingNoisyReceiver()
 
         exoPlayer.playWhenReady = true
     }
@@ -222,7 +223,8 @@ class MusicService : Service() {
     private fun pause() {
         exoPlayer.playWhenReady = false
 
-        unregisterReceiver(becomingNoisyReceiver)
+        unregisterBecomingNoisyReceiver()
+        abandonAudioFocus()
 
         mediaSession?.apply {
             setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
@@ -234,8 +236,7 @@ class MusicService : Service() {
         exoPlayer.stop()
         lastInitializedTrack = null
 
-        unregisterReceiver(becomingNoisyReceiver)
-
+        unregisterBecomingNoisyReceiver()
         abandonAudioFocus()
 
         mediaSession?.apply {
@@ -279,6 +280,18 @@ class MusicService : Service() {
             audioManager.abandonAudioFocusRequest(audioFocusRequest)
         } else {
             audioManager.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
+
+    private fun registerBecomingNoisyReceiver() {
+        if (!becomingNoisyReceiverRegistered) {
+            registerReceiver(becomingNoisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        }
+    }
+
+    private fun unregisterBecomingNoisyReceiver() {
+        if (becomingNoisyReceiverRegistered) {
+            unregisterReceiver(becomingNoisyReceiver)
         }
     }
 
