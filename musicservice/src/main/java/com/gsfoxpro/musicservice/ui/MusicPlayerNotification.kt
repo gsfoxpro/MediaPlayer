@@ -48,7 +48,7 @@ class MusicPlayerNotification {
                     .setContentTitle(description.title)
                     .setContentText(description.subtitle)
                     .setSmallIcon(smallIcon)
-                    .setLargeIcon(largeImage ?: BitmapFactory.decodeResource(context.resources, android.R.drawable.ic_delete)) //временно
+                    .setLargeIcon(largeImage ?: BitmapFactory.decodeResource(context.resources, android.R.mipmap.sym_def_app_icon)) //временно
                     .setShowWhen(false)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

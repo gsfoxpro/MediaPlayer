@@ -2,9 +2,16 @@ package com.gsfoxpro.musicservice.service
 
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Binder
+import android.os.Build
 import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaButtonReceiver
@@ -24,16 +31,20 @@ import com.gsfoxpro.musicservice.ui.MusicPlayerNotification
 
 class MusicService : Service() {
 
-    inner class LocalBinder(val musicService: MusicService = this@MusicService) : Binder()
-    private val binder = LocalBinder()
-
     var mediaSession: MediaSessionCompat? = null
         private set
 
     var musicRepo: MusicRepo? = null
 
+    private val binder = LocalBinder()
+    private lateinit var exoPlayer: SimpleExoPlayer
+    private lateinit var audioManager: AudioManager
+    private lateinit var audioFocusRequest: AudioFocusRequest
+    private var audioFocusRequested = false
+    private var lastInitializedTrack: AudioTrack? = null
     private val metadataBuilder = MediaMetadataCompat.Builder()
-    private val stateBuilder:PlaybackStateCompat.Builder = PlaybackStateCompat.Builder()
+
+    private val stateBuilder: PlaybackStateCompat.Builder = PlaybackStateCompat.Builder()
          .setActions(
                  PlaybackStateCompat.ACTION_PLAY
                  or PlaybackStateCompat.ACTION_STOP
@@ -42,9 +53,7 @@ class MusicService : Service() {
                  or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
                  or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
 
-    private var lastInitializedTrack: AudioTrack? = null
-
-    private var mediaSessionCallback = object : MediaSessionCompat.Callback() {
+    private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
 
         override fun onSkipToQueueItem(id: Long) {
             super.onSkipToQueueItem(id)
@@ -76,12 +85,71 @@ class MusicService : Service() {
 
     }
 
-    private lateinit var exoPlayer: SimpleExoPlayer
+    private val becomingNoisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY == intent.action) {
+                mediaSessionCallback.onPause()
+            }
+        }
+    }
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_GAIN -> mediaSessionCallback.onPlay()
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> mediaSessionCallback.onPause()
+            else -> mediaSessionCallback.onPause()
+        }
+    }
+
+    private val playerListener = object : Player.EventListener {
+        override fun onRepeatModeChanged(repeatMode: Int) {
+        }
+
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters?) {
+        }
+
+        override fun onTracksChanged(trackGroups: TrackGroupArray?, trackSelections: TrackSelectionArray?) {
+        }
+
+        override fun onPlayerError(error: ExoPlaybackException?) {
+        }
+
+        override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
+            if (musicRepo?.autoPlay == true && playWhenReady && playbackState == Player.STATE_ENDED) {
+                mediaSessionCallback.onSkipToNext()
+            }
+        }
+
+        override fun onLoadingChanged(isLoading: Boolean) {
+        }
+
+        override fun onPositionDiscontinuity() {
+        }
+
+        override fun onTimelineChanged(timeline: Timeline?, manifest: Any?) {
+        }
+    }
 
     override fun onBind(intent: Intent?) = binder
 
     override fun onCreate() {
         super.onCreate()
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                    .setAcceptsDelayedFocusGain(false)
+                    .setWillPauseWhenDucked(true)
+                    .setAudioAttributes(audioAttributes)
+                    .build()
+        }
+
+
         val mediaButtonIntent = Intent(Intent.ACTION_MEDIA_BUTTON, null, applicationContext, MediaButtonReceiver::class.java)
 
         mediaSession = MediaSessionCompat(this, "MusicService").apply {
@@ -91,34 +159,7 @@ class MusicService : Service() {
         }
 
         exoPlayer = ExoPlayerFactory.newSimpleInstance(DefaultRenderersFactory(this), DefaultTrackSelector(), DefaultLoadControl())
-        exoPlayer.addListener(object : Player.EventListener {
-            override fun onRepeatModeChanged(repeatMode: Int) {
-            }
-
-            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters?) {
-            }
-
-            override fun onTracksChanged(trackGroups: TrackGroupArray?, trackSelections: TrackSelectionArray?) {
-            }
-
-            override fun onPlayerError(error: ExoPlaybackException?) {
-            }
-
-            override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-                if (musicRepo?.autoPlay == true && playWhenReady && playbackState == Player.STATE_ENDED) {
-                    mediaSessionCallback.onSkipToNext()
-                }
-            }
-
-            override fun onLoadingChanged(isLoading: Boolean) {
-            }
-
-            override fun onPositionDiscontinuity() {
-            }
-
-            override fun onTimelineChanged(timeline: Timeline?, manifest: Any?) {
-            }
-        })
+        exoPlayer.addListener(playerListener)
     }
 
     override fun onDestroy() {
@@ -134,15 +175,6 @@ class MusicService : Service() {
 
     private fun initTrack(audioTrack: AudioTrack?) {
         audioTrack?.let {
-            metadataBuilder
-                    .putString(MediaMetadataCompat.METADATA_KEY_ART_URI, it.imageUrl)
-                    //.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, BitmapFactory.decodeResource(getResources(), track.getBitmapResId()))
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, it.subtitle)
-                    //.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, track.getArtist())
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, it.title)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, exoPlayer.duration) //тут по идее уже надо бы проинициализировать трек
-            mediaSession?.setMetadata(metadataBuilder.build())
-
             val mediaSource = ExtractorMediaSource(
                     Uri.parse(it.url),
                     DefaultDataSourceFactory(applicationContext, "user-agent"),
@@ -150,6 +182,13 @@ class MusicService : Service() {
                     null,
                     null)
             exoPlayer.prepare(mediaSource)
+
+            metadataBuilder
+                    .putString(MediaMetadataCompat.METADATA_KEY_ART_URI, it.imageUrl)
+                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, it.subtitle)
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, it.title)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, exoPlayer.duration)
+            mediaSession?.setMetadata(metadataBuilder.build())
 
             lastInitializedTrack = it
         }
@@ -165,17 +204,25 @@ class MusicService : Service() {
             initTrack(audioTrack)
         }
 
+        if (!requestAudioFocus()) {
+            return
+        }
+
         mediaSession?.apply {
             isActive = true
             setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PLAYING, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
             MusicPlayerNotification.show(this@MusicService, this)
         }
 
+        registerReceiver(becomingNoisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+
         exoPlayer.playWhenReady = true
     }
 
     private fun pause() {
         exoPlayer.playWhenReady = false
+
+        unregisterReceiver(becomingNoisyReceiver)
 
         mediaSession?.apply {
             setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
@@ -186,6 +233,10 @@ class MusicService : Service() {
     private fun stop() {
         exoPlayer.stop()
         lastInitializedTrack = null
+
+        unregisterReceiver(becomingNoisyReceiver)
+
+        abandonAudioFocus()
 
         mediaSession?.apply {
             isActive = false
@@ -201,4 +252,35 @@ class MusicService : Service() {
     private fun prev() {
         play(musicRepo?.prevAudioTrack)
     }
+
+    private fun requestAudioFocus(): Boolean {
+        if (!audioFocusRequested) {
+            audioFocusRequested = true
+
+            val audioFocusResult: Int =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) audioManager.requestAudioFocus(audioFocusRequest)
+                    else audioManager.requestAudioFocus(audioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+
+            if (audioFocusResult != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun abandonAudioFocus() {
+        if (!audioFocusRequested) {
+            return
+        }
+
+        audioFocusRequested = false
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioManager.abandonAudioFocusRequest(audioFocusRequest)
+        } else {
+            audioManager.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
+
+    inner class LocalBinder(val musicService: MusicService = this@MusicService) : Binder()
 }

@@ -11,7 +11,7 @@ import com.gsfoxpro.musicservice.R
 import kotlinx.android.synthetic.main.music_player.view.*
 
 
-class MusicPlayer : FrameLayout {
+open class MusicPlayer : FrameLayout {
 
     var mediaSession: MediaSessionCompat? = null
         set(value) {
@@ -76,8 +76,8 @@ class MusicPlayer : FrameLayout {
 
     private fun updateUI() {
         when (playing) {
-            true -> play_pause_button.setImageResource(R.drawable.ic_pause_black_24dp)
-            else -> play_pause_button.setImageResource(R.drawable.ic_play_arrow_black_24dp)
+            true -> play_pause_button.setImageResource(R.drawable.ic_pause)
+            else -> play_pause_button.setImageResource(R.drawable.ic_play_arrow)
         }
     }
 
