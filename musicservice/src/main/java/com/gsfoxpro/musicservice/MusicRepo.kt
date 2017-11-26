@@ -9,7 +9,7 @@ open class MusicRepo(private val playlist: ArrayList<AudioTrack>) {
     private val hasPrev get() = !playlist.isEmpty() && currentTrackIndex > 0
 
     open var autoPlay = true
-    val currentAudioTrack: AudioTrack?
+    open val currentAudioTrack: AudioTrack?
         get() = getAudioTrackAtIndex(currentTrackIndex)
     open val nextAudioTrack: AudioTrack?
         get() = when (hasNext) {
@@ -22,5 +22,5 @@ open class MusicRepo(private val playlist: ArrayList<AudioTrack>) {
             else -> null
         }
 
-    fun getAudioTrackAtIndex(index: Int): AudioTrack? = playlist.getOrNull(index)
+    private fun getAudioTrackAtIndex(index: Int): AudioTrack? = playlist.getOrNull(index)
 }

@@ -8,17 +8,13 @@ import android.support.v4.media.session.MediaControllerCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.AttributeSet
-import android.util.Log
-import android.view.LayoutInflater
 import android.widget.FrameLayout
 import android.widget.SeekBar
-import com.gsfoxpro.musicservice.R
 import com.gsfoxpro.musicservice.service.MusicService
-import kotlinx.android.synthetic.main.music_player.view.*
 import java.util.concurrent.TimeUnit
 
 
-open class MusicPlayer : FrameLayout {
+abstract class MusicPlayer : FrameLayout {
 
     val TAG = "MusicPlayer"
 
@@ -28,34 +24,44 @@ open class MusicPlayer : FrameLayout {
             registerCallback()
         }
 
+    protected val playing
+        get() = mediaController?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
+
+    private var seekBar: SeekBar? = null
+
     private val mediaController: MediaControllerCompat?
         get() = mediaSession?.controller
-
-    private val playing
-        get() = mediaController?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
 
     private var callbackRegistered = false
     private var needUpdateProgress = false
 
     private val mediaControllerCallback = object : MediaControllerCompat.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackStateCompat?) {
-            super.onPlaybackStateChanged(state)
-            updateUI()
+            updateButtonsStates()
         }
 
         override fun onMetadataChanged(metadata: MediaMetadataCompat?) {
-            super.onMetadataChanged(metadata)
-            updateUI()
+            metadata?.let { data ->
+                updateTrackInfo(data)
+                val duration = data.getLong(METADATA_KEY_DURATION)
+                if (duration >= 0) {
+                    if (seekBar?.max != duration.toInt()) {
+                        seekBar?.progress = 0
+                    }
+                    seekBar?.max = duration.toInt()
+                    updateDuration(duration)
+                }
+            }
+            needUpdateProgress = playing
         }
 
         override fun onSessionEvent(event: String?, extras: Bundle?) {
-            super.onSessionEvent(event, extras)
             when (event) {
                 MusicService.PROGRESS_UPDATE_EVENT -> {
                     val progress = extras?.getLong(MusicService.CURRENT_PROGRESS) ?: 0L
                     if (progress >= 0 && needUpdateProgress) {
-                        current_position_textview.text = getUserFriendlyTime(progress)
-                        seek_bar.progress = progress.toInt()
+                        updateCurrentPosition(progress)
+                        seekBar?.progress = progress.toInt()
                     }
                 }
             }
@@ -71,43 +77,6 @@ open class MusicPlayer : FrameLayout {
     constructor(context: Context?, attrs: AttributeSet?, defStyleAttr: Int, defStyleRes: Int) : super(context, attrs, defStyleAttr, defStyleRes)
 
     init {
-        LayoutInflater.from(context).inflate(R.layout.music_player, this)
-
-        play_pause_button.setOnClickListener {
-            mediaController?.let { controller ->
-                when (playing) {
-                    true -> controller.transportControls.pause()
-                    else -> controller.transportControls.play()
-                }
-            }
-        }
-
-        next_button.setOnClickListener {
-            mediaController?.transportControls?.skipToNext()
-        }
-
-        prev_button.setOnClickListener {
-            mediaController?.transportControls?.skipToPrevious()
-        }
-
-        seek_bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                current_position_textview.text = getUserFriendlyTime(progress.toLong())
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                needUpdateProgress = false
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                seekBar?.progress?.toLong()?.let { progressMs ->
-                    mediaController?.transportControls?.seekTo(progressMs)
-                    needUpdateProgress = true
-                }
-            }
-
-        })
-
         registerCallback()
     }
 
@@ -121,26 +90,62 @@ open class MusicPlayer : FrameLayout {
         mediaController?.unregisterCallback(mediaControllerCallback)
     }
 
-    private fun updateUI() {
-        when (playing) {
-            true -> play_pause_button.setImageResource(R.drawable.ic_pause)
-            else -> play_pause_button.setImageResource(R.drawable.ic_play_arrow)
-        }
-        val data = mediaController?.metadata
-        val title = data?.description?.title
-        val subtitle = data?.description?.subtitle
-        Log.d(TAG, "title: $title")
-        Log.d(TAG, "subtitle: $subtitle")
-        data?.getLong(METADATA_KEY_DURATION)?.let { duration ->
-            if (duration >= 0) {
-                if (seek_bar.max != duration.toInt()) {
-                    seek_bar.progress = 0
-                }
-                seek_bar.max = duration.toInt()
-                duration_textview.text = getUserFriendlyTime(duration)
+    protected fun playPause() {
+        mediaController?.let { controller ->
+            when (playing) {
+                true -> controller.transportControls.pause()
+                else -> controller.transportControls.play()
             }
         }
-        needUpdateProgress = playing
+    }
+
+    protected fun next() {
+        mediaController?.transportControls?.skipToNext()
+    }
+
+    protected fun prev() {
+        mediaController?.transportControls?.skipToPrevious()
+    }
+
+    protected fun initSeekBar(seekBar: SeekBar) {
+        this.seekBar = seekBar
+        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                updateCurrentPosition(progress.toLong())
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                needUpdateProgress = false
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                seekBar?.progress?.toLong()?.let { progressMs ->
+                    mediaController?.transportControls?.seekTo(progressMs)
+                    needUpdateProgress = true
+                }
+            }
+        })
+
+    }
+
+    abstract fun updateButtonsStates()
+
+    abstract fun updateTrackInfo(metadata: MediaMetadataCompat)
+
+    abstract fun updateDuration(durationMs: Long)
+
+    abstract fun updateCurrentPosition(positionMs: Long)
+
+    protected fun getUserFriendlyTime(timeMs: Long): String {
+        if (timeMs < 0) {
+            return "0:00"
+        }
+        val seconds = TimeUnit.MILLISECONDS.toSeconds(timeMs) % 60
+        if (seconds < 10) {
+            return "${TimeUnit.MILLISECONDS.toMinutes(timeMs)}:0$seconds"
+        }
+
+        return "${TimeUnit.MILLISECONDS.toMinutes(timeMs)}:$seconds"
     }
 
     private fun registerCallback() {
@@ -153,16 +158,5 @@ open class MusicPlayer : FrameLayout {
         }
     }
 
-    private fun getUserFriendlyTime(timeMs: Long): String {
-        if (timeMs < 0) {
-            return "0:00"
-        }
-        val seconds = TimeUnit.MILLISECONDS.toSeconds(timeMs) % 60
-        if (seconds < 10) {
-            return "${TimeUnit.MILLISECONDS.toMinutes(timeMs)}:0$seconds"
-        }
-
-        return "${TimeUnit.MILLISECONDS.toMinutes(timeMs)}:$seconds"
-    }
 
 }

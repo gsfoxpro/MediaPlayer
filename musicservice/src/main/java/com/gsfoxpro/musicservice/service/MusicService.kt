@@ -18,9 +18,9 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import android.util.Log
 import com.google.android.exoplayer2.*
-import com.google.android.exoplayer2.Player.*
+import com.google.android.exoplayer2.Player.STATE_ENDED
+import com.google.android.exoplayer2.Player.STATE_READY
 import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.source.ExtractorMediaSource
 import com.google.android.exoplayer2.source.TrackGroupArray
@@ -56,6 +56,9 @@ class MusicService : Service() {
     private var lastInitializedTrack: AudioTrack? = null
     private val metadataBuilder = MediaMetadataCompat.Builder()
     private var becomingNoisyReceiverRegistered = false
+    private val updateIntervalMs = 1000L
+    private val progressHandler = Handler()
+    private var needUpdateProgress = false
 
     private val stateBuilder: PlaybackStateCompat.Builder = PlaybackStateCompat.Builder()
          .setActions(
@@ -67,29 +70,48 @@ class MusicService : Service() {
                  or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
 
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
-
         override fun onPlay() {
-            play()
+            play(musicRepo?.currentAudioTrack)
         }
 
         override fun onPause() {
-            pause()
+            exoPlayer.playWhenReady = false
+
+            stopUpdateProgress()
+            unregisterBecomingNoisyReceiver()
+            abandonAudioFocus()
+
+            mediaSession?.apply {
+                setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, exoPlayer.currentPosition, 1F).build())
+                MusicPlayerNotification.show(this@MusicService, this)
+            }
         }
 
         override fun onStop() {
-            stop()
+            exoPlayer.stop()
+            lastInitializedTrack = null
+
+            stopUpdateProgress()
+            unregisterBecomingNoisyReceiver()
+            abandonAudioFocus()
+
+            mediaSession?.apply {
+                isActive = false
+                setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_STOPPED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
+            }
+            MusicPlayerNotification.hide(this@MusicService)
         }
 
         override fun onSkipToNext() {
-            next()
+            play(musicRepo?.nextAudioTrack)
         }
 
         override fun onSkipToPrevious() {
-            prev()
+            play(musicRepo?.prevAudioTrack)
         }
 
-        override fun onSeekTo(pos: Long) {
-            seekTo(pos)
+        override fun onSeekTo(positionMs: Long) {
+            exoPlayer.seekTo(positionMs)
         }
     }
 
@@ -109,9 +131,6 @@ class MusicService : Service() {
         }
     }
 
-    private val updateIntervalMs = 1000L
-    private val progressHandler = Handler()
-    private var needUpdateProgress = false
     private val updateProgressTask = Runnable {
         if (needUpdateProgress) {
             val bundle = Bundle().apply {
@@ -136,16 +155,8 @@ class MusicService : Service() {
         }
 
         override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-            val tag = "MusicService"
-            var msg = ""
             when (playbackState) {
-                STATE_IDLE -> msg = "STATE_IDLE"
-                STATE_BUFFERING -> {
-                    msg = "STATE_BUFFERING"
-                }
                 STATE_READY -> {
-                    msg = "STATE_READY"
-
                     val duration = exoPlayer.duration
                     if (duration >= 0) {
                         metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
@@ -154,14 +165,11 @@ class MusicService : Service() {
 
                 }
                 STATE_ENDED -> {
-                    msg = "STATE_ENDED"
                     if (musicRepo?.autoPlay == true && playWhenReady) {
                         mediaSessionCallback.onSkipToNext()
                     }
                 }
             }
-            msg = "$msg playWhenReady = $playWhenReady"
-            Log.d(tag, msg)
         }
 
         override fun onLoadingChanged(isLoading: Boolean) {
@@ -192,7 +200,6 @@ class MusicService : Service() {
                     .setAudioAttributes(audioAttributes)
                     .build()
         }
-
 
         val mediaButtonIntent = Intent(Intent.ACTION_MEDIA_BUTTON, null, applicationContext, MediaButtonReceiver::class.java)
 
@@ -238,11 +245,6 @@ class MusicService : Service() {
         }
     }
 
-    private fun play() {
-        val currentTrack = musicRepo?.currentAudioTrack
-        play(currentTrack)
-    }
-
     private fun play(audioTrack: AudioTrack?) {
         if (audioTrack == null) {
             return
@@ -272,46 +274,6 @@ class MusicService : Service() {
         startUpdateProgress()
     }
 
-    private fun pause() {
-        exoPlayer.playWhenReady = false
-        stopUpdateProgress()
-
-        unregisterBecomingNoisyReceiver()
-        abandonAudioFocus()
-
-        mediaSession?.apply {
-            setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_PAUSED, exoPlayer.currentPosition, 1F).build())
-            MusicPlayerNotification.show(this@MusicService, this)
-        }
-    }
-
-    private fun stop() {
-        exoPlayer.stop()
-        startUpdateProgress()
-        lastInitializedTrack = null
-
-        unregisterBecomingNoisyReceiver()
-        abandonAudioFocus()
-
-        mediaSession?.apply {
-            isActive = false
-            setPlaybackState(stateBuilder.setState(PlaybackStateCompat.STATE_STOPPED, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1F).build())
-        }
-        MusicPlayerNotification.hide(this@MusicService)
-    }
-
-    private fun next() {
-        play(musicRepo?.nextAudioTrack)
-    }
-
-    private fun prev() {
-        play(musicRepo?.prevAudioTrack)
-    }
-
-    private fun seekTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs)
-    }
-
     private fun requestAudioFocus(): Boolean {
         if (!audioFocusRequested) {
             audioFocusRequested = true
@@ -331,9 +293,7 @@ class MusicService : Service() {
         if (!audioFocusRequested) {
             return
         }
-
         audioFocusRequested = false
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             audioManager.abandonAudioFocusRequest(audioFocusRequest)
         } else {
