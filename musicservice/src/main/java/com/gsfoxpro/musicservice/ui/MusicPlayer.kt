@@ -167,8 +167,4 @@ abstract class MusicPlayer : FrameLayout {
             sendCommand(MusicService.UPDATE_INFO, null, null)
         }
     }
-
-    private fun updateUI() {
-
-    }
 }

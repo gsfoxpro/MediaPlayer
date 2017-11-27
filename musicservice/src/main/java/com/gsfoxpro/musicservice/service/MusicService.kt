@@ -338,8 +338,6 @@ class MusicService : Service() {
     }
 
     private fun sendPlaylistInfoEvent() {
-        val hasNext = musicRepo?.hasNext == true
-        val hasPrev = musicRepo?.hasPrev == true
         val bundle = Bundle().apply {
             putBoolean(HAS_NEXT, musicRepo?.hasNext == true)
             putBoolean(HAS_PREV, musicRepo?.hasPrev == true)
