@@ -24,8 +24,12 @@ abstract class MusicPlayer : FrameLayout {
             registerCallback()
         }
 
+
     protected val playing
         get() = mediaController?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
+
+    protected var hasNext = false
+    protected var hasPrev = false
 
     private var seekBar: SeekBar? = null
 
@@ -63,6 +67,11 @@ abstract class MusicPlayer : FrameLayout {
                         updateCurrentPosition(progress)
                         seekBar?.progress = progress.toInt()
                     }
+                }
+                MusicService.PLAYLIST_INFO_EVENT -> {
+                    hasNext = extras?.getBoolean(MusicService.HAS_NEXT, false) ?: false
+                    hasPrev = extras?.getBoolean(MusicService.HAS_PREV, false) ?: false
+                    updateButtonsStates()
                 }
             }
         }
@@ -155,8 +164,11 @@ abstract class MusicPlayer : FrameLayout {
         mediaController?.apply {
             registerCallback(mediaControllerCallback)
             callbackRegistered = true
+            sendCommand(MusicService.UPDATE_INFO, null, null)
         }
     }
 
+    private fun updateUI() {
 
+    }
 }

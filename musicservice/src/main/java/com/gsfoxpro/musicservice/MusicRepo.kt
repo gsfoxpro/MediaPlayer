@@ -4,9 +4,10 @@ import com.gsfoxpro.musicservice.model.AudioTrack
 
 open class MusicRepo(private val playlist: ArrayList<AudioTrack>) {
 
+    val hasNext get() = !playlist.isEmpty() && currentTrackIndex < playlist.size - 1
+    val hasPrev get() = !playlist.isEmpty() && currentTrackIndex > 0
+
     private var currentTrackIndex = 0
-    private val hasNext get() = !playlist.isEmpty() && currentTrackIndex < playlist.size - 1
-    private val hasPrev get() = !playlist.isEmpty() && currentTrackIndex > 0
 
     open var autoPlay = true
     open val currentAudioTrack: AudioTrack?

@@ -10,10 +10,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.net.Uri
-import android.os.Binder
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
+import android.os.*
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
@@ -35,8 +32,12 @@ import com.gsfoxpro.musicservice.ui.MusicPlayerNotification
 class MusicService : Service() {
 
     companion object {
+        const val UPDATE_INFO = "UPDATE_INFO"
         const val PROGRESS_UPDATE_EVENT = "PROGRESS_UPDATE_EVENT"
         const val CURRENT_PROGRESS = "CURRENT_PROGRESS"
+        const val PLAYLIST_INFO_EVENT = "PLAYLIST_INFO_EVENT"
+        const val HAS_NEXT = "HAS_NEXT"
+        const val HAS_PREV = "HAS_PREV"
     }
 
     var mediaSession: MediaSessionCompat? = null
@@ -70,6 +71,15 @@ class MusicService : Service() {
                  or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
 
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
+        override fun onCommand(command: String?, extras: Bundle?, cb: ResultReceiver?) {
+            when (command) {
+                UPDATE_INFO -> {
+                    mediaSession?.setMetadata(metadataBuilder.build())
+                    sendPlaylistInfoEvent()
+                }
+            }
+        }
+
         override fun onPlay() {
             play(musicRepo?.currentAudioTrack)
         }
@@ -243,6 +253,7 @@ class MusicService : Service() {
 
             lastInitializedTrack = it
         }
+        sendPlaylistInfoEvent()
     }
 
     private fun play(audioTrack: AudioTrack?) {
@@ -324,6 +335,16 @@ class MusicService : Service() {
     private fun stopUpdateProgress() {
         needUpdateProgress = false
         progressHandler.removeCallbacks(updateProgressTask)
+    }
+
+    private fun sendPlaylistInfoEvent() {
+        val hasNext = musicRepo?.hasNext == true
+        val hasPrev = musicRepo?.hasPrev == true
+        val bundle = Bundle().apply {
+            putBoolean(HAS_NEXT, musicRepo?.hasNext == true)
+            putBoolean(HAS_PREV, musicRepo?.hasPrev == true)
+        }
+        mediaSession?.sendSessionEvent(PLAYLIST_INFO_EVENT, bundle)
     }
 
     inner class LocalBinder(val musicService: MusicService = this@MusicService) : Binder()

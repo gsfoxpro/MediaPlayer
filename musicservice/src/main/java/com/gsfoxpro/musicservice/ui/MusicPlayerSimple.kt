@@ -33,6 +33,8 @@ class MusicPlayerSimple : MusicPlayer {
             true -> play_pause_button.setImageResource(R.drawable.ic_pause)
             else -> play_pause_button.setImageResource(R.drawable.ic_play_arrow)
         }
+        next_button?.alpha = if (hasNext) 1F else 0.5F
+        prev_button?.alpha = if (hasPrev) 1F else 0.5F
     }
 
     override fun updateTrackInfo(metadata: MediaMetadataCompat) {
