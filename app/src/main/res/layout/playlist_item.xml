@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="80dp">
+
+    <TextView
+        android:id="@+id/title_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:layout_marginStart="16dp"
+        app:layout_constraintBottom_toTopOf="@+id/subtitle_textview"
+        app:layout_constraintEnd_toStartOf="@+id/music_player_button"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/image_view"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="Audio title" />
+
+    <TextView
+        android:id="@+id/subtitle_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toTopOf="@+id/devider"
+        app:layout_constraintEnd_toEndOf="@+id/title_textview"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="@+id/title_textview"
+        app:layout_constraintTop_toBottomOf="@+id/title_textview"
+        tools:text="Audio subtitle" />
+
+    <ImageView
+        android:id="@+id/image_view"
+        android:scaleType="centerCrop"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginStart="16dp"
+        app:layout_constraintBottom_toTopOf="@+id/devider"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@mipmap/ic_launcher" />
+
+    <View
+        android:id="@+id/devider"
+        android:background="#aaa"
+        android:layout_width="wrap_content"
+        android:layout_height="1dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:srcCompat="@drawable/ic_launcher_foreground" />
+
+    <com.gsfoxpro.musicservice.ui.MusicPlayerButton
+        android:id="@+id/music_player_button"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.523" />
+</android.support.constraint.ConstraintLayout>

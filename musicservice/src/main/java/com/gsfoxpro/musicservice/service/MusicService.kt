@@ -123,6 +123,10 @@ class MusicService : Service() {
         override fun onSeekTo(positionMs: Long) {
             exoPlayer.seekTo(positionMs)
         }
+
+        override fun onSkipToQueueItem(id: Long) {
+            play(musicRepo?.getAudioTrackAtId(id))
+        }
     }
 
     private val becomingNoisyReceiver = object : BroadcastReceiver() {
@@ -246,6 +250,7 @@ class MusicService : Service() {
 
             metadataBuilder
                     .putString(MediaMetadataCompat.METADATA_KEY_ART_URI, it.imageUrl)
+                    .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_URI, it.url)
                     .putString(MediaMetadataCompat.METADATA_KEY_TITLE, it.subtitle)
                     .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, it.title)
                     .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, -1)

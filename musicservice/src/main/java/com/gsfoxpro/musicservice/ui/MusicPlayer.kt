@@ -24,6 +24,8 @@ abstract class MusicPlayer : FrameLayout {
             registerCallback()
         }
 
+    protected val mediaController: MediaControllerCompat?
+        get() = mediaSession?.controller
 
     protected val playing
         get() = mediaController?.playbackState?.state == PlaybackStateCompat.STATE_PLAYING
@@ -32,9 +34,6 @@ abstract class MusicPlayer : FrameLayout {
     protected var hasPrev = false
 
     private var seekBar: SeekBar? = null
-
-    private val mediaController: MediaControllerCompat?
-        get() = mediaSession?.controller
 
     private var callbackRegistered = false
     private var needUpdateProgress = false
