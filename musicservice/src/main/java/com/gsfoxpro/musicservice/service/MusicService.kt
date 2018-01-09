@@ -156,17 +156,6 @@ class MusicService : Service() {
     }
 
     private val playerListener = object : Player.EventListener {
-        override fun onRepeatModeChanged(repeatMode: Int) {
-        }
-
-        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters?) {
-        }
-
-        override fun onTracksChanged(trackGroups: TrackGroupArray?, trackSelections: TrackSelectionArray?) {
-        }
-
-        override fun onPlayerError(error: ExoPlaybackException?) {
-        }
 
         override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
             when (playbackState) {
@@ -186,10 +175,28 @@ class MusicService : Service() {
             }
         }
 
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+        }
+
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters?) {
+        }
+
+        override fun onTracksChanged(trackGroups: TrackGroupArray?, trackSelections: TrackSelectionArray?) {
+        }
+
+        override fun onPlayerError(error: ExoPlaybackException?) {
+        }
+
         override fun onLoadingChanged(isLoading: Boolean) {
         }
 
-        override fun onPositionDiscontinuity() {
+        override fun onPositionDiscontinuity(reason: Int) {
+        }
+
+        override fun onSeekProcessed() {
         }
 
         override fun onTimelineChanged(timeline: Timeline?, manifest: Any?) {
@@ -234,18 +241,16 @@ class MusicService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        MediaButtonReceiver.handleIntent(mediaSession, intent);
+        MediaButtonReceiver.handleIntent(mediaSession, intent)
         return super.onStartCommand(intent, flags, startId)
     }
 
     private fun initTrack(audioTrack: AudioTrack?) {
         audioTrack?.let {
-            val mediaSource = ExtractorMediaSource(
-                    Uri.parse(it.url),
-                    DefaultDataSourceFactory(applicationContext, "user-agent"),
-                    DefaultExtractorsFactory(),
-                    null,
-                    null)
+            val mediaSource = ExtractorMediaSource.Factory(DefaultDataSourceFactory(applicationContext, "user-agent"))
+                    .setExtractorsFactory(DefaultExtractorsFactory())
+                    .createMediaSource(Uri.parse(it.url))
+
             exoPlayer.prepare(mediaSource)
 
             metadataBuilder
