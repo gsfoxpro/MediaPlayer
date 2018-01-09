@@ -29,7 +29,7 @@ class MusicPlayerButton : MusicPlayer {
                 return@setOnClickListener
             }
             audioTrack?.id?.let { id ->
-                mediaController?.transportControls?.skipToQueueItem(id)
+                skipToQueueItem(id)
             }
         }
     }
