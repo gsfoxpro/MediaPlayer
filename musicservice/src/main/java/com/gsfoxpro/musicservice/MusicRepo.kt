@@ -2,7 +2,7 @@ package com.gsfoxpro.musicservice
 
 import com.gsfoxpro.musicservice.model.AudioTrack
 
-open class MusicRepo(private val playlist: ArrayList<AudioTrack>) {
+open class MusicRepo(private val playlist: List<AudioTrack>) {
 
     val hasNext get() = !playlist.isEmpty() && currentTrackIndex < playlist.size - 1
     val hasPrev get() = !playlist.isEmpty() && currentTrackIndex > 0
