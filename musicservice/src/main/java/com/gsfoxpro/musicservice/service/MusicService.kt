@@ -15,6 +15,7 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.widget.Toast
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.Player.STATE_ENDED
 import com.google.android.exoplayer2.Player.STATE_READY
@@ -85,6 +86,8 @@ class MusicService : Service() {
         }
 
         override fun onPause() {
+            MusicPlayerNotification.hide(this@MusicService)
+
             exoPlayer.playWhenReady = false
 
             stopUpdateProgress()
@@ -236,14 +239,23 @@ class MusicService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        exoPlayer.release()
-        mediaSession?.release()
-        MusicPlayerNotification.hide(this@MusicService)
+        release()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        release()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         MediaButtonReceiver.handleIntent(mediaSession, intent)
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    private fun release() {
+        exoPlayer.release()
+        mediaSession?.release()
+        MusicPlayerNotification.hide(this@MusicService)
     }
 
     private fun initTrack(audioTrack: AudioTrack?) {
