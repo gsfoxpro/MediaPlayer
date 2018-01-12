@@ -238,6 +238,7 @@ class MusicService : Service() {
         super.onDestroy()
         exoPlayer.release()
         mediaSession?.release()
+        MusicPlayerNotification.hide(this@MusicService)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
