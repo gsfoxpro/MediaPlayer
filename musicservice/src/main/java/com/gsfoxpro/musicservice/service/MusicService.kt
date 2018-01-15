@@ -15,7 +15,6 @@ import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import android.widget.Toast
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.Player.STATE_ENDED
 import com.google.android.exoplayer2.Player.STATE_READY
@@ -86,8 +85,6 @@ class MusicService : Service() {
         }
 
         override fun onPause() {
-            MusicPlayerNotification.hide(this@MusicService)
-
             exoPlayer.playWhenReady = false
 
             stopUpdateProgress()
